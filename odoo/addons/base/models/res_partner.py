@@ -609,7 +609,7 @@ class Partner(models.Model):
         """ Handle sync of commercial fields to descendants """
         commercial_partner = self.commercial_partner_id
         sync_vals = commercial_partner._update_fields_values(self._commercial_fields())
-        sync_children = self.child_ids.filtered(lambda c: not c.is_company)
+        sync_children = self.child_ids  # .filtered(lambda c: not c.is_company)
         for child in sync_children:
             child._commercial_sync_to_children()
         res = sync_children.write(sync_vals)
@@ -640,7 +640,7 @@ class Partner(models.Model):
             commercial_fields = self._commercial_fields()
             if any(field in values for field in commercial_fields):
                 self.sudo()._commercial_sync_to_children()
-        for child in self.child_ids.filtered(lambda c: not c.is_company):
+        for child in self.child_ids:  # .filtered(lambda c: not c.is_company):
             if child.commercial_partner_id != self.commercial_partner_id:
                 self.sudo()._commercial_sync_to_children()
                 break
