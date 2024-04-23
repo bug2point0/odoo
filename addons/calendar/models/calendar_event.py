@@ -288,7 +288,7 @@ class Meeting(models.Model):
     @api.depends_context('uid')
     def _compute_user_can_edit(self):
         for event in self:
-            event.user_can_edit = self.env.user in event.partner_ids.user_ids + event.user_id or self.env.user.has_group('base.group_partner_manager')
+            event.user_can_edit = self.env.user in event.partner_ids.user_ids + event.user_id
 
     @api.depends('attendee_ids')
     def _compute_invalid_email_partner_ids(self):
@@ -373,7 +373,7 @@ class Meeting(models.Model):
         """
         for event in self:
             if event.stop_date and event.start_date:
-                event.write({
+                event.with_context(is_calendar_event_new=True).write({
                     'start': fields.Datetime.from_string(event.start_date).replace(hour=8),
                     'stop': fields.Datetime.from_string(event.stop_date).replace(hour=18),
                 })
@@ -759,7 +759,7 @@ class Meeting(models.Model):
         # don't forget to update recurrences if there are some base events in the set to unlink,
         # but after having removed the events ;-)
         recurrences = self.env["calendar.recurrence"].search([
-            ('base_event_id.id', 'in', [e.id for e in self])
+            ('base_event_id', 'in', [e.id for e in self])
         ])
 
         result = super().unlink()

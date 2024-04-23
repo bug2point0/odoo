@@ -4,7 +4,7 @@
 # 
 # Translators:
 # Wil Odoo, 2023
-# Lucia Pacheco, 2024
+# Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2024
 # Fernanda Alvarez, 2024
 # 
 msgid ""
@@ -425,7 +425,7 @@ msgid ""
 "creating new records for this alias."
 msgstr ""
 "Un diccionario de Python que se evaluará con el fin de proporcionar valores "
-"predefinidos cuando se creen nuevos registros para este seudónimo."
+"predeterminados cuando se creen nuevos registros para este seudónimo."
 
 #. module: crm
 #: model_terms:digest.tip,tip_description:crm.digest_tip_crm_3
@@ -506,7 +506,7 @@ msgstr "Decoración de actividad de excepción"
 #. module: crm
 #: model:ir.ui.menu,name:crm.mail_activity_plan_menu_config_lead
 msgid "Activity Plans"
-msgstr "Planes de actividades"
+msgstr "Planes de actividad"
 
 #. module: crm
 #: model:ir.model.fields,field_description:crm.field_crm_lead__activity_state
@@ -930,7 +930,7 @@ msgstr "Nota de cierre"
 #. module: crm
 #: model:ir.model.fields,field_description:crm.field_crm_lead__color
 msgid "Color Index"
-msgstr "Índice de colores"
+msgstr "Índice de color"
 
 #. module: crm
 #: model:ir.model.fields,field_description:crm.field_crm_activity_report__company_id
@@ -2289,7 +2289,7 @@ msgid ""
 "Looks like nothing is planned. :(<br><br><i>Tip: Schedule activities to keep"
 " track of everything you have to do!</i>"
 msgstr ""
-"Parece que no hay nada planeado :(<br><br><i>Consejo: programe actividades "
+"Parece que no hay nada planeado. :(<br><br><i>Consejo: programe actividades "
 "para llevar un registro de todo lo que tiene que hacer.</i>"
 
 #. module: crm
@@ -2361,7 +2361,7 @@ msgid ""
 "all teams."
 msgstr ""
 "La asignación manual permite activar la asignación desde la vista de "
-"formulario del equipo con un botón de acción. Configura de forma automática "
+"formulario del equipo con un botón de acción. En automático se configurará "
 "un cron que ejecuta repetidamente la asignación en todos los equipos."
 
 #. module: crm
@@ -3318,7 +3318,7 @@ msgstr "Restaurar"
 #. module: crm
 #: model:ir.model.fields,field_description:crm.field_res_config_settings__crm_use_auto_assignment
 msgid "Rule-Based Assignment"
-msgstr "Asignación según las reglas"
+msgstr "Asignación por reglas"
 
 #. module: crm
 #: model_terms:ir.ui.view,arch_db:crm.res_config_settings_view_form
@@ -3493,7 +3493,7 @@ msgstr "Mostrar solo oportunidades"
 #: model:ir.model.fields,field_description:crm.field_crm_team__assignment_optout
 #: model:ir.model.fields,field_description:crm.field_crm_team_member__assignment_optout
 msgid "Skip auto assignment"
-msgstr "Saltar autoasignación"
+msgstr "Omitir durante la asignación automática"
 
 #. module: crm
 #: model_terms:ir.ui.view,arch_db:crm.crm_case_tree_view_oppor
@@ -4052,9 +4052,9 @@ msgid ""
 msgstr ""
 "Utilice leads si necesita un paso de calificación antes de crear una "
 "oportunidad o cliente. Puede ser una tarjeta de presentación que recibió, un"
-" formulario de contacto proveniente de su sitio web o un archivo de "
-"prospectos sin calificar que importó, etc. Una vez calificado, el lead puede"
-" convertirse en una oportunidad empresarial o en un nuevo cliente en su "
+" formulario de contacto proveniente de su sitio web o un archivo importado "
+"de prospectos sin calificar, etc. Una vez calificado, el lead puede "
+"convertirse en una oportunidad empresarial o en un nuevo cliente en su "
 "directorio."
 
 #. module: crm

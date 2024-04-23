@@ -4,6 +4,7 @@ import { Mutex } from "@web/core/utils/concurrency";
 import { clamp } from "@web/core/utils/numbers";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import dom from "@web/legacy/js/core/dom";
+import { session } from "@web/session";
 import Widget from "@web/legacy/js/core/widget";
 import { useDragAndDrop } from "@web_editor/js/editor/drag_and_drop";
 import options from "@web_editor/js/editor/snippets.options";
@@ -27,6 +28,7 @@ import { touching, closest } from "@web/core/utils/ui";
 import { _t } from "@web/core/l10n/translation";
 import { renderToElement } from "@web/core/utils/render";
 import { RPCError } from "@web/core/network/rpc_service";
+import { ColumnLayoutMixin } from "@web_editor/js/common/column_layout_mixin";
 
 let cacheSnippetTemplate = {};
 
@@ -605,6 +607,7 @@ var SnippetEditor = Widget.extend({
         const proms = sortBy(styles, "__order").map((style) => {
             return show ? style.onTargetShow() : style.onTargetHide();
         });
+        this.options.wysiwyg.snippetsMenu.reload_snippet_dropzones();
         await Promise.all(proms);
         return show;
     },
@@ -863,7 +866,11 @@ var SnippetEditor = Widget.extend({
             onDragStart: (args) => {
                 this.dragStarted = true;
                 const targetRect = this.$target[0].getBoundingClientRect();
-                this.mousePositionYOnElement = args.y - targetRect.y;
+                // Bound the Y mouse position to the element height minus one
+                // grid row, to be able to drag from the bottom in a grid.
+                const gridRowSize = gridUtils.rowSize;
+                const boundedYMousePosition = Math.min(args.y, targetRect.bottom - gridRowSize);
+                this.mousePositionYOnElement = boundedYMousePosition - targetRect.y;
                 this.mousePositionXOnElement = args.x - targetRect.x;
                 this._onDragAndDropStart(args);
             },
@@ -1090,6 +1097,13 @@ var SnippetEditor = Widget.extend({
             this.dragState.isColumn = true;
             // Deactivate the snippet so the overlay doesn't show.
             this.trigger_up('deactivate_snippet', {$snippet: self.$target});
+        }
+
+        // If the target has a mobile order class, store its parent and order.
+        const targetMobileOrder = this.$target[0].style.order;
+        if (targetMobileOrder) {
+            this.dragState.startingParent = this.$target[0].parentNode;
+            this.dragState.mobileOrder = parseInt(targetMobileOrder);
         }
 
         const toInsertInline = window.getComputedStyle(this.$target[0]).display.includes('inline');
@@ -1459,6 +1473,13 @@ var SnippetEditor = Widget.extend({
                 this.styles[i].onMove();
             }
 
+            // If the target has a mobile order class, and if it was dropped in
+            // another snippet, fill the gap left in the starting snippet.
+            if (this.dragState.mobileOrder !== undefined
+                && this.$target[0].parentNode !== this.dragState.startingParent) {
+                ColumnLayoutMixin._fillRemovedItemGap(this.dragState.startingParent, this.dragState.mobileOrder);
+            }
+
             this.$target.trigger('content_changed');
             $from.trigger('content_changed');
         }
@@ -1663,9 +1684,9 @@ var SnippetEditor = Widget.extend({
         const bottom = top + columnHeight;
         let left = x - rowElLeft - this.mousePositionXOnElement;
 
-        // Horizontal & vertical overflow.
+        // Horizontal and top overflow.
         left = clamp(left, 0, rowEl.clientWidth - columnWidth);
-        top = clamp(top, 0, rowEl.clientHeight - columnHeight);
+        top = top < 0 ? 0 : top;
 
         columnEl.style.top = top + 'px';
         columnEl.style.left = left + 'px';
@@ -1852,6 +1873,13 @@ var SnippetsMenu = Widget.extend({
         // own window and not on the top window lest jquery behave unexpectedly.
         this.$el = this.window.$(this.$el);
         this.$el.data('snippetMenu', this);
+
+        // TODO somehow this attribute is not on the HTML element of the backend
+        // ... it probably should be.
+        const context = this.options.context || session.user_context || {};
+        const userLang = context.user_lang || context.lang || 'en_US';
+        this.el.setAttribute('lang', userLang.replace('_', '-'));
+
         // We need to activate the touch events to be able to drag and drop
         // snippets on devices with a touch screen.
         this.__onTouchEvent = this._onTouchEvent.bind(this);
@@ -2091,7 +2119,7 @@ var SnippetsMenu = Widget.extend({
             // menu will take part of the screen width (delayed because of
             // animation). (TODO wait for real animation end)
             setTimeout(() => {
-                this.$window.trigger('resize');
+                this.$window[0].dispatchEvent(new Event("resize"));
             }, 1000);
         });
     },
@@ -3175,11 +3203,15 @@ var SnippetsMenu = Widget.extend({
             var $snippet = $(this);
             var $snippetBody = $snippet.find('.oe_snippet_body');
             const isSanitizeForbidden = $snippet.data('oeForbidSanitize');
-            const filterSanitize = isSanitizeForbidden === 'form'
-                ? $els => $els.filter((i, el) => !el.closest('[data-oe-sanitize]:not([data-oe-sanitize="allow_form"])'))
+            const checkSanitize = isSanitizeForbidden === "form"
+                ? (el) => !el.closest('[data-oe-sanitize]:not([data-oe-sanitize="allow_form"])')
                 : isSanitizeForbidden
-                    ? $els => $els.filter((i, el) => !el.closest('[data-oe-sanitize]'))
-                    : $els => $els;
+                    ? (el) => !el.closest('[data-oe-sanitize]')
+                    : () => true;
+            const isVisible = (el) => el.closest(".o_snippet_invisible")
+                ? !(el.offsetHeight === 0 || el.offsetWidth === 0)
+                : true;
+            const canDrop = ($els) => [...$els].some((el) => checkSanitize(el) && isVisible(el));
 
             var check = false;
             self.templateOptions.forEach((option, k) => {
@@ -3189,8 +3221,8 @@ var SnippetsMenu = Widget.extend({
 
                 k = isSanitizeForbidden ? 'forbidden/' + k : k;
                 cache[k] = cache[k] || {
-                    'drop-near': option['drop-near'] ? filterSanitize(option['drop-near'].all()).length : 0,
-                    'drop-in': option['drop-in'] ? filterSanitize(option['drop-in'].all()).length : 0,
+                    'drop-near': option['drop-near'] ? canDrop(option['drop-near'].all()) : false,
+                    'drop-in': option['drop-in'] ? canDrop(option['drop-in'].all()) : false,
                 };
                 check = (cache[k]['drop-near'] || cache[k]['drop-in']);
             });

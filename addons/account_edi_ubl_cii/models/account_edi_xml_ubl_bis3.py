@@ -59,10 +59,14 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
             vals.pop('registration_name', None)
             vals.pop('registration_address_vals', None)
 
-            # /!\ For Australian companies, the ABN is encoded on the VAT field, but doesn't have the 2 digits prefix,
-            # causing a validation error
-            if partner.country_id.code == "AU" and partner.vat and not partner.vat.upper().startswith("AU"):
-                vals['company_id'] = "AU" + partner.vat
+            # Some extra european countries use Bis 3 but do not prepend their VAT with the country code (i.e.
+            # Australia). Allow them to use Bis 3 without raising BR-CO-09.
+            if (
+                partner.country_id
+                and partner.country_id not in self.env.ref('base.europe').country_ids
+                and not partner.vat[:2].isalpha()
+            ):
+                vals['company_id'] = partner.country_id.code + partner.vat
 
         # sources:
         #  https://anskaffelser.dev/postaward/g3/spec/current/billing-3.0/norway/#_applying_foretaksregisteret
@@ -109,6 +113,7 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
         # EXTENDS account.edi.xml.ubl_21
         vals = super()._get_partner_party_vals(partner, role)
 
+        partner = partner.commercial_partner_id
         vals.update({
             'endpoint_id': partner.peppol_endpoint,
             'endpoint_id_attrs': {'schemeID': partner.peppol_eas},
@@ -129,7 +134,7 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
     def _get_delivery_vals_list(self, invoice):
         # EXTENDS account.edi.xml.ubl_21
         supplier = invoice.company_id.partner_id.commercial_partner_id
-        customer = invoice.commercial_partner_id
+        customer = invoice.partner_id
 
         economic_area = self.env.ref('base.europe').country_ids.mapped('code') + ['NO']
         intracom_delivery = (customer.country_id.code in economic_area
@@ -191,8 +196,6 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
 
         for vals in vals_list:
             vals.pop('name')
-            # [UBL-CR-601]-A UBL invoice should not include the InvoiceLine Item ClassifiedTaxCategory TaxExemptionReason
-            #vals.pop('tax_exemption_reason')
 
         return vals_list
 
@@ -207,6 +210,17 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
                 subtotal_vals['currency_dp'] = 2
 
         return vals_list
+
+    def _get_invoice_line_item_vals(self, line, taxes_vals):
+        # EXTENDS account.edi.xml.ubl_21
+        line_item_vals = super()._get_invoice_line_item_vals(line, taxes_vals)
+
+        for val in line_item_vals['classified_tax_category_vals']:
+            # [UBL-CR-601] TaxExemptionReason must not appear in InvoiceLine Item ClassifiedTaxCategory
+            # [BR-E-10] TaxExemptionReason must only appear in TaxTotal TaxSubtotal TaxCategory
+            val.pop('tax_exemption_reason')
+
+        return line_item_vals
 
     def _get_invoice_line_allowance_vals_list(self, line, tax_values_list=None):
         # EXTENDS account.edi.xml.ubl_21
@@ -255,13 +269,6 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
     def _export_invoice_constraints(self, invoice, vals):
         # EXTENDS account.edi.xml.ubl_21
         constraints = super()._export_invoice_constraints(invoice, vals)
-
-        constraints.update({
-            'peppol_eas_is_set_supplier': self._check_required_fields(vals['supplier'], 'peppol_eas'),
-            'peppol_eas_is_set_customer': self._check_required_fields(vals['customer'], 'peppol_eas'),
-            'peppol_endpoint_is_set_supplier':  self._check_required_fields(vals['supplier'], 'peppol_endpoint'),
-            'peppol_endpoint_is_set_customer':  self._check_required_fields(vals['customer'], 'peppol_endpoint'),
-        })
 
         constraints.update(
             self._invoice_constraints_peppol_en16931_ubl(invoice, vals)
@@ -326,6 +333,20 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
                 # [UBL-SR-48]-Invoice lines shall have one and only one classified tax category.
                 # /!\ exception: possible to have any number of ecotaxes (fixed tax) with a regular percentage tax
                 constraints.update({'cen_en16931_tax_line': _("Each invoice line shall have one and only one tax.")})
+
+        for role in ('supplier', 'customer'):
+            constraints[f'cen_en16931_{role}_country'] = self._check_required_fields(vals[role], 'country_id')
+            scheme_vals = vals['vals'][f'accounting_{role}_party_vals']['party_vals']['party_tax_scheme_vals'][-1:]
+            if (
+                not (scheme_vals and scheme_vals[0]['company_id'] and scheme_vals[0]['company_id'][:2].isalpha())
+                and (scheme_vals and scheme_vals[0]['tax_scheme_vals'].get('id') == 'VAT')
+                and self._name in ('account.edi.xml.ubl_bis3', 'account.edi.xml.ubl_nl', 'account.edi.xml.ubl_de')
+            ):
+                # [BR-CO-09]-The Seller VAT identifier (BT-31), the Seller tax representative VAT identifier (BT-63)
+                # and the Buyer VAT identifier (BT-48) shall have a prefix in accordance with ISO code ISO 3166-1
+                # alpha-2 by which the country of issue may be identified. Nevertheless, Greece may use the prefix ‘EL’.
+                constraints.update({f'cen_en16931_{role}_vat_country_code': _(
+                    "The VAT of the %s should be prefixed with its country code.", role)})
 
         return constraints
 
@@ -396,18 +417,5 @@ class AccountEdiXmlUBLBIS3(models.AbstractModel):
                 'no_r_001': _(
                     "The VAT number of the supplier does not seem to be valid. It should be of the form: NO179728982MVA."
                 ) if not mva.is_valid(vat) or len(vat) != 14 or vat[:2] != 'NO' or vat[-3:] != 'MVA' else "",
-
-                'no_supplier_bronnoysund': _(
-                    "The supplier %s must have a Bronnoysund company registry.",
-                    vals['supplier'].display_name
-                ) if 'l10n_no_bronnoysund_number' not in vals['supplier']._fields or not vals['supplier'].l10n_no_bronnoysund_number else "",
             })
-        if vals['customer'].country_id.code == 'NO':
-            constraints.update({
-                'no_customer_bronnoysund': _(
-                    "The supplier %s must have a Bronnoysund company registry.",
-                    vals['customer'].display_name
-                ) if 'l10n_no_bronnoysund_number' not in vals['customer']._fields or not vals['customer'].l10n_no_bronnoysund_number else "",
-            })
-
         return constraints

@@ -606,7 +606,7 @@ msgid ""
 "creating new records for this alias."
 msgstr ""
 "Un diccionario de Python que se evaluará con el fin de proporcionar valores "
-"predefinidos cuando se creen nuevos registros para este seudónimo."
+"predeterminados cuando se creen nuevos registros para este seudónimo."
 
 #. module: project
 #: model:ir.model.constraint,message:project.constraint_project_collaborator_unique_collaborator
@@ -706,7 +706,7 @@ msgstr "Decoración de la actividad de excepción"
 #: model:ir.actions.act_window,name:project.mail_activity_plan_action_config_project_task_plan
 #: model:ir.ui.menu,name:project.mail_activity_plan_menu_config_project
 msgid "Activity Plans"
-msgstr "Planes de actividades"
+msgstr "Planes de actividad"
 
 #. module: project
 #: model:ir.model.fields,field_description:project.field_project_project__activity_state
@@ -1357,7 +1357,7 @@ msgstr "Color"
 #: model:ir.model.fields,field_description:project.field_project_project__color
 #: model:ir.model.fields,field_description:project.field_project_task__color
 msgid "Color Index"
-msgstr "Índice de colores"
+msgstr "Índice de color"
 
 #. module: project
 #. odoo-javascript
@@ -4420,7 +4420,7 @@ msgstr "Mostrar el proyecto en el tablero"
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Show all records which has next action date is before today"
 msgstr ""
-"Mostrar todos los registros cuya fecha de siguiente actividad es antes de "
+"Mostrar todos los registros que tienen la próxima fecha de acción antes de "
 "hoy"
 
 #. module: project
@@ -4735,7 +4735,7 @@ msgstr "Calificación de tarea"
 #. module: project
 #: model:ir.model,name:project.model_project_task_recurrence
 msgid "Task Recurrence"
-msgstr "Recurrencia de tareas"
+msgstr "Recurrencia de la tarea"
 
 #. module: project
 #: model:ir.model,name:project.model_project_task_type
