@@ -468,15 +468,15 @@ class Partner(models.Model):
                              'was never correctly set. If an existing contact starts working for a new '
                              'company then a new contact should be created under that new '
                              'company. You can use the "Discard" button to abandon this change.')}
-        if partner.type == 'contact' or self.type == 'contact':
-            # for contacts: copy the parent address, if set (aka, at least one
-            # value is set in the address: otherwise, keep the one from the
-            # contact)
-            address_fields = self._address_fields()
-            if any(self.parent_id[key] for key in address_fields):
-                def convert(value):
-                    return value.id if isinstance(value, models.BaseModel) else value
-                result['value'] = {key: convert(self.parent_id[key]) for key in address_fields}
+        # if partner.type == 'contact' or self.type == 'contact':
+        #     # for contacts: copy the parent address, if set (aka, at least one
+        #     # value is set in the address: otherwise, keep the one from the
+        #     # contact)
+        #     address_fields = self._address_fields()
+        #     if any(self.parent_id[key] for key in address_fields):
+        #         def convert(value):
+        #             return value.id if isinstance(value, models.BaseModel) else value
+        #         result['value'] = {key: convert(self.parent_id[key]) for key in address_fields}
         return result
 
     @api.onchange('parent_id')
@@ -626,9 +626,9 @@ class Partner(models.Model):
             if values.get('parent_id'):
                 self.sudo()._commercial_sync_from_company()
             # 1b. Address fields: sync if parent or use_parent changed *and* both are now set
-            if self.parent_id and self.type == 'contact':
-                onchange_vals = self.onchange_parent_id().get('value', {})
-                self.update_address(onchange_vals)
+            # if self.parent_id and self.type == 'contact':
+            #     onchange_vals = self.onchange_parent_id().get('value', {})
+            #     self.update_address(onchange_vals)
 
         # 2. To DOWNSTREAM: sync children
         self._children_sync(values)
@@ -646,10 +646,10 @@ class Partner(models.Model):
                 self.sudo()._commercial_sync_to_children()
                 break
         # 2b. Address fields: sync if address changed
-        address_fields = self._address_fields()
-        if any(field in values for field in address_fields):
-            contacts = self.child_ids.filtered(lambda c: c.type == 'contact')
-            contacts.update_address(values)
+        # address_fields = self._address_fields()
+        # if any(field in values for field in address_fields):
+        #     contacts = self.child_ids.filtered(lambda c: c.type == 'contact')
+        #     contacts.update_address(values)
 
     def _handle_first_contact_creation(self):
         """ On creation of first contact for a company (or root) that has no address, assume contact address
