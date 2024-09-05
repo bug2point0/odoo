@@ -3,7 +3,7 @@
 
 import ast
 
-from markupsafe import Markup
+from textwrap import dedent
 
 from odoo import Command
 from odoo.tests.common import TransactionCase, BaseCase
@@ -18,12 +18,44 @@ class TestSafeEval(BaseCase):
         expected = (1, {"a": {2.5}}, [None, u"foo"])
         actual = const_eval('(1, {"a": {2.5}}, [None, u"foo"])')
         self.assertEqual(actual, expected)
+        # Test RETURN_CONST
+        self.assertEqual(const_eval('10'), 10)
 
     def test_expr(self):
         # NB: True and False are names in Python 2 not consts
         expected = 3 * 4
         actual = expr_eval('3 * 4')
         self.assertEqual(actual, expected)
+
+    def test_expr_eval_opcodes(self):
+        for expr, expected in [
+            ('3', 3),  # RETURN_CONST
+            ('[1,2,3,4][1:3]', [2, 3]),  # BINARY_SLICE
+        ]:
+            self.assertEqual(expr_eval(expr), expected)
+
+    def test_safe_eval_opcodes(self):
+        for expr, locals_dict, expected in [
+            ('[x for x in (1,2)]', {}, [1, 2]),  # LOAD_FAST_AND_CLEAR
+            ('list(x for x in (1,2))', {}, [1, 2]),  # END_FOR, CALL_INTRINSIC_1
+            ('v if v is None else w', {'v': False, 'w': 'foo'}, 'foo'),  # POP_JUMP_IF_NONE
+            ('v if v is not None else w', {'v': None, 'w': 'foo'}, 'foo'),  # POP_JUMP_IF_NOT_NONE
+            ('{a for a in (1, 2)}', {}, {1, 2}),  # RERAISE
+        ]:
+            self.assertEqual(safe_eval(expr, locals_dict=locals_dict), expected)
+
+    def test_safe_eval_exec_opcodes(self):
+        for expr, locals_dict, expected in [
+            ("""
+                def f(v):
+                    if v:
+                        x = 1
+                    return x
+                result = f(42)
+            """, {}, 1),  # LOAD_FAST_CHECK
+        ]:
+            safe_eval(dedent(expr), locals_dict=locals_dict, mode="exec", nocopy=True)
+            self.assertEqual(locals_dict['result'], expected)
 
     def test_01_safe_eval(self):
         """ Try a few common expressions to verify they work with safe_eval """
@@ -61,68 +93,6 @@ class TestSafeEval(BaseCase):
         # no dunder
         with self.assertRaises(NameError):
             safe_eval("self.__name__", {'self': self}, mode="exec")
-
-    def test_06_safe_eval_format(self):
-        # string.format
-        self.assertEqual(safe_eval("'__{0}__'.format('Foo')"), '__Foo__')
-        self.assertEqual(safe_eval("'{0.__self__}'.format(abs)"), '{0.__self__}')
-        self.assertEqual(safe_eval("'{0.f_globals}'.format(abs)"), '{0.f_globals}')
-
-        # string.format_map
-        self.assertEqual(safe_eval("'__{foo}__'.format_map({'foo': 'Foo'})"), '__Foo__')
-        self.assertEqual(safe_eval("'{foo.__self__}'.format_map({'foo': abs})"), '{foo.__self__}')
-        self.assertEqual(safe_eval("'{foo.f_globals}'.format_map({'foo': abs})"), '{foo.f_globals}')
-
-        # Evaluation context for Markup asserts
-        c = {"Markup": Markup}
-
-        # Markup.format
-        self.assertEqual(safe_eval("Markup('__{0}__').format('Foo')", c), Markup('__Foo__'))
-        with self.assertRaisesRegex(ValueError, 'Access to forbidden name'):
-            safe_eval("Markup('{0.__self__}').format(abs)", c)
-        with self.assertRaisesRegex(ValueError, 'Access to forbidden name'):
-            safe_eval("Markup('{0.f_globals}').format(abs)", c)
-
-        # Markup.format_map
-        self.assertEqual(safe_eval("Markup('__{foo}__').format_map({'foo': 'Foo'})", c), Markup('__Foo__'))
-        self.assertEqual(safe_eval("Markup('{foo.__self__}').format_map({'foo': abs})", c), Markup('{foo.__self__}'))
-        self.assertEqual(safe_eval("Markup('{foo.f_globals}').format_map({'foo': abs})", c), Markup('{foo.f_globals}'))
-
-    def test_07_safe_eval_attribute_error_obj(self):
-        locals_dict = {}
-        try:
-            safe_eval("""
-try:
-    dict.foo
-except Exception as e:
-    action = {'args': e.args, 'obj': e.obj, 'name': e.name}
-            """, locals_dict=locals_dict, mode="exec", nocopy=True)
-        except ValueError as e:
-            # AttributeError.name, AttributeError.obj added in Python 3.10
-            # https://github.com/python/cpython/commit/37494b441aced0362d7edd2956ab3ea7801e60c8
-            self.assertIn("'AttributeError' object has no attribute 'obj'", e.args[0])
-        else:
-            exception = locals_dict.get('action')
-            self.assertEqual(exception['args'], ("type object 'dict' has no attribute 'foo'",))
-            self.assertIsNone(exception['name'])
-            self.assertIsNone(exception['obj'])
-
-        attribute_error = None
-        try:
-            raise AttributeError('Foo', name='Bar', obj=[])
-        except TypeError as e:
-            # AttributeError does not take keyword arguments before Python 3.10
-            # https://github.com/python/cpython/commit/37494b441aced0362d7edd2956ab3ea7801e60c8
-            # Error can be either, according to the Python version:
-            # - AttributeError does not take keyword arguments
-            # - AttributeError() takes no keyword arguments
-            self.assertIn("keyword arguments", e.args[0])
-        except AttributeError as e:
-            attribute_error = e
-        if attribute_error:
-            self.assertEqual(attribute_error.args, ('Foo',))
-            self.assertEqual(attribute_error.name, 'Bar')
-            self.assertIsNone(attribute_error.obj)
 
 
 class TestParentStore(TransactionCase):

@@ -41,6 +41,9 @@ class WebsiteSale(main.WebsiteSale):
     @http.route()
     def cart(self, **post):
         order = request.website.sale_get_order()
+        if order and order.state != 'draft':
+            request.session['sale_order_id'] = None
+            order = request.website.sale_get_order()
         if order:
             order._update_programs_and_rewards()
             order._auto_apply_rewards()
@@ -94,7 +97,7 @@ class WebsiteSale(main.WebsiteSale):
                     (program_sudo.trigger == 'with_code' and program_sudo.program_type != 'promo_code')
                     or (program_sudo.trigger == 'auto' and program_sudo.applies_on == 'future')
                 ):
-                    return self.pricelist(code)
+                    return self.pricelist(code, **post)
         if coupon:
             self._apply_reward(order_sudo, reward_sudo, coupon)
         return request.redirect(redirect)
